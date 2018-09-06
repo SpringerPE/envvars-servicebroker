@@ -13,12 +13,18 @@ import (
 	"github.com/go-martini/martini"
 	"github.com/kr/pretty"
 	"github.com/martini-contrib/auth"
+	"github.com/springernature/envvars-servicebroker/handler"
 )
 
 var appURL, dashboardURL, syslogDrainUrl, credentials string
 var serviceName, servicePlan, baseGUID, authUser, authPassword, tags, serviceDescription string
 var metadataDisplayName, metadataLongDescription, metadataImageURL, metadataProviderDisplayName, metadataDocumentationUrl, metadataSupportUrl string
 var fakeAsync bool
+var serviceBinding serviceBindingResponse
+type serviceBindingResponse struct {
+	Credentials    map[string]interface{} `json:"credentials"`
+	SyslogDrainURL string                 `json:"syslog_drain_url,omitempty"`
+}
 
 type lastOperationResponse struct {
 	State       string `json:"state"`
@@ -211,5 +217,14 @@ func main() {
 
 	fmt.Println("Running as", appURL)
 
-	m.Run()
+	//m.Run()
+	mux := http.NewServeMux()
+	c := handler.BrokerCatalog{}
+	s := handler.ServiceInstance{}
+	//TODO validate method is a GET
+	mux.Handle("/v2/catalog", c)
+	mux.Handle("/v2/service_instances/", s)
+	if err := http.ListenAndServe(":3000", mux); err != nil {
+		log.Fatal(err)
+	}
 }

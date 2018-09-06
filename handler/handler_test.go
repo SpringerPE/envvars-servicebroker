@@ -1,12 +1,14 @@
-package main
+package handler
 
 import (
 	"encoding/json"
-	"github.com/cloudfoundry-community/types-cf"
-	"github.com/go-martini/martini"
 	"io/ioutil"
+	"net/http"
 	"reflect"
 	"testing"
+
+	"github.com/cloudfoundry-community/types-cf"
+	"github.com/springernature/envvars-servicebroker/internal"
 )
 
 type response struct {
@@ -14,9 +16,21 @@ type response struct {
 	body   []byte
 }
 
+type partialResponse struct {
+	body []byte
+}
+
 func TestGetCatalog(t *testing.T) {
-	h, b := brokerCatalog()
-	raw, _ := ioutil.ReadFile("test/catalog.json")
+	bc := BrokerCatalog{}
+	w := internal.CreateFakeWriter()
+	r := &http.Request{
+		Method: http.MethodGet,
+	}
+	bc.ServeHTTP(w, r)
+	raw, err := ioutil.ReadFile("../test/catalog.json")
+	if err != nil {
+		t.Fatalf("Error: %s", err)
+	}
 	e := response{
 		200,
 		raw,
@@ -29,8 +43,8 @@ func TestGetCatalog(t *testing.T) {
 		expected response
 	}{
 		{
-			header:   h,
-			body:     b,
+			header:   w.Status,
+			body:     w.Bytes,
 			name:     "Should return empty catalog for empty env vars",
 			expected: e,
 		},
@@ -44,9 +58,12 @@ func TestGetCatalog(t *testing.T) {
 }
 
 func TestGetLastOperation(t *testing.T) {
-	p := make(martini.Params)
-	p["service_id"] = "some service id"
-	h, b := lastOperation(p)
+	lo := LastOperation{}
+	w := internal.CreateFakeWriter()
+	r := &http.Request{
+		Method: http.MethodGet,
+	}
+	lo.ServeHTTP(w, r)
 
 	lastOp := lastOperationResponse{
 		State:       "succeeded",
@@ -65,8 +82,8 @@ func TestGetLastOperation(t *testing.T) {
 		expected response
 	}{
 		{
-			header:   h,
-			body:     b,
+			header:   w.Status,
+			body:     w.Bytes,
 			name:     "Should return last operation",
 			expected: expectResp,
 		},
@@ -80,10 +97,16 @@ func TestGetLastOperation(t *testing.T) {
 }
 
 func TestCreateServiceInstance(t *testing.T) {
-	dashboardURL = "amazing.dashboard.com"
-	p := make(martini.Params)
-	p["service_id"] = "some service id"
-	h, b := createServiceInstance(p)
+	si := CreateServiceInstance{
+		DashboardURL: "amazing.dashboard.com",
+		ServiceID:    "some service id",
+	}
+	w := internal.CreateFakeWriter()
+	r := &http.Request{
+		Method: http.MethodPut,
+	}
+
+	si.Handle(w, r)
 
 	creationResp := cf.ServiceCreationResponse{
 		DashboardURL: "amazing.dashboard.com",
@@ -101,8 +124,8 @@ func TestCreateServiceInstance(t *testing.T) {
 		expected response
 	}{
 		{
-			header:   h,
-			body:     b,
+			header:   w.Status,
+			body:     w.Bytes,
 			name:     "Should return a successful creation response",
 			expected: expectResp,
 		},
@@ -116,9 +139,15 @@ func TestCreateServiceInstance(t *testing.T) {
 }
 
 func TestDeleteServiceInstance(t *testing.T) {
-	p := make(martini.Params)
-	p["service_id"] = "some service id"
-	h, b := deleteServiceInstance(p)
+	di := DeleteServiceInstance{
+		ServiceID: "some service id",
+	}
+	w := internal.CreateFakeWriter()
+	r := &http.Request{
+		Method: http.MethodDelete,
+	}
+
+	di.Handle(w, r)
 
 	expectResp := response{
 		200,
@@ -132,8 +161,8 @@ func TestDeleteServiceInstance(t *testing.T) {
 		expected response
 	}{
 		{
-			header:   h,
-			body:     []byte(b),
+			header:   w.Status,
+			body:     w.Bytes,
 			name:     "Should return a successful deletion response",
 			expected: expectResp,
 		},
@@ -145,30 +174,32 @@ func TestDeleteServiceInstance(t *testing.T) {
 }
 
 func TestCreateServiceBinding(t *testing.T) {
-	credentials = `{"port": "5514", "host": "syslog-app.snpaas.eu"}`
-	p := make(martini.Params)
-	p["service_id"] = "some service id"
-	h, b := createServiceBinding(p)
+	sb := CreateServiceBinding{
+		ServiceName:      "service name",
+		ServicePlan:      "service plan",
+		Credentials:      `{"port": 5514, "host": "syslog-app.snpaas.eu"}`,
+		SyslogDrainUrl:   "syslog.drain.url",
+		ServiceID:        "some service id",
+		ServiceBindingID: "some service binding",
+	}
+	w := internal.CreateFakeWriter()
+	r := &http.Request{
+		Method: http.MethodPut,
+	}
+	sb.Handle(w, r)
 
-	credentials = `{"port": 5514, "host": "syslog-app.snpaas.eu"}`
-	he, be:=createServiceBinding(p)
-
-	cred := make(map[string]string)
-	cred["port"] = "5514"
+	cred := make(map[string]interface{})
+	cred["port"] = 5514
 	cred["host"] = "syslog-app.snpaas.eu"
 
-	creationResp := cf.ServiceBindingResponse{
-		Credentials: cred,
+	creationResp := serviceBindingResponse{
+		Credentials:    cred,
+		SyslogDrainURL: "syslog.drain.url",
 	}
 	cr, _ := json.Marshal(creationResp)
 	expectResp := response{
 		201,
 		cr,
-	}
-
-	expectErrResp := response{
-		500,
-		[]byte{},
 	}
 
 	testCases := []struct {
@@ -178,30 +209,33 @@ func TestCreateServiceBinding(t *testing.T) {
 		expected response
 	}{
 		{
-			header:   h,
-			body:     b,
+			header:   w.Status,
+			body:     w.Bytes,
 			name:     "Should return a successful binding response",
 			expected: expectResp,
-		},
-		{
-			header:   he,
-			body:     be,
-			name:     "Should return an error for credentials in the wrong format",
-			expected: expectErrResp,
 		},
 	}
 
 	for _, tc := range testCases {
-		body := &cf.ServiceBindingResponse{}
-		expectedBody := &cf.ServiceBindingResponse{}
+		body := &serviceBindingResponse{}
+		expectedBody := &serviceBindingResponse{}
 		assertBodyAgainstExpectations(tc.body, body, tc.expected, expectedBody, tc.header, tc.name, t, true)
 	}
 }
 
 func TestDeleteServiceBinding(t *testing.T) {
-	p := make(martini.Params)
-	p["service_id"] = "some service id"
-	h, b := deleteServiceBinding(p)
+	id := "some service id"
+	bId := "some service binding id"
+	di := DeleteServiceBinding{
+		ServiceID:        id,
+		ServiceBindingID: bId,
+	}
+	w := internal.CreateFakeWriter()
+	r := &http.Request{
+		Method: http.MethodDelete,
+	}
+
+	di.Handle(w, r)
 
 	expectResp := response{
 		200,
@@ -215,8 +249,8 @@ func TestDeleteServiceBinding(t *testing.T) {
 		expected response
 	}{
 		{
-			header:   h,
-			body:     []byte(b),
+			header:   w.Status,
+			body:     w.Bytes,
 			name:     "Should return a successful deletion response",
 			expected: expectResp,
 		},
@@ -228,8 +262,13 @@ func TestDeleteServiceBinding(t *testing.T) {
 }
 
 func TestShowServiceDashboard(t *testing.T) {
-	p := make(martini.Params)
-	h, b := showServiceInstanceDashboard(p)
+	sd := ServiceDashboard{}
+	w := internal.CreateFakeWriter()
+	r := &http.Request{
+		Method: http.MethodGet,
+	}
+
+	sd.ServeHTTP(w, r)
 
 	expectResp := response{
 		200,
@@ -243,8 +282,8 @@ func TestShowServiceDashboard(t *testing.T) {
 		expected response
 	}{
 		{
-			header:   h,
-			body:     []byte(b),
+			header:   w.Status,
+			body:     w.Bytes,
 			name:     "Should return a successful deletion response",
 			expected: expectResp,
 		},
@@ -266,8 +305,15 @@ func assertBodyAgainstExpectations(
 	handleJson bool,
 ) {
 	if handleJson {
-		json.Unmarshal(tcBody, body)
-		json.Unmarshal(tcExpected.body, expectedBody)
+		e := json.Unmarshal(tcBody, body)
+		if e != nil {
+			t.Fatalf("Error while marshalling body")
+		}
+		err := json.Unmarshal(tcExpected.body, expectedBody)
+		if err != nil {
+			t.Fatalf("Error while marshalling expected body")
+		}
+
 	}
 	if header != tcExpected.header || !reflect.DeepEqual(body, expectedBody) {
 		j, _ := json.Marshal(body)
