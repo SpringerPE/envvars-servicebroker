@@ -13,22 +13,6 @@ import (
 	"github.com/springernature/envvars-servicebroker/handler"
 )
 
-var appURL, serviceDashboardURL, syslogDrainUrl, credentials string
-var serviceName, servicePlan, authUser, authPassword, tags, serviceDescription string
-var metadataDisplayName, metadataLongDescription, metadataImageURL, metadataProviderDisplayName, metadataDocumentationUrl, metadataSupportUrl string
-var fakeAsync bool
-var serviceBinding serviceBindingResponse
-
-type serviceBindingResponse struct {
-	Credentials    map[string]interface{} `json:"credentials"`
-	SyslogDrainURL string                 `json:"syslog_drain_url,omitempty"`
-}
-
-type lastOperationResponse struct {
-	State       string `json:"state"`
-	Description string `json:"description,omitempty"`
-}
-
 func init() {
 	log.SetFlags(log.Ltime | log.Lshortfile)
 }
@@ -45,6 +29,7 @@ func main() {
 	appPort := getEnvVar("PORT", "3000") // default of martini
 	appName := "some-service"
 	appEnv, err := cfenv.Current()
+	var appURL string
 	if err == nil {
 		appURL = fmt.Sprintf("https://%s", appEnv.ApplicationURIs[0])
 		appName = appEnv.Name
@@ -52,32 +37,35 @@ func main() {
 		appURL = "http://localhost:" + appPort
 	}
 	baseGUID := getEnvVar("SERVICE_BASE_GUID", "29140B3F-0E69-4C7E-8A35")
-	serviceName = getEnvVar("SERVICE_NAME", appName)
-	servicePlan = getEnvVar("SERVICE_PLAN", "shared")
-	serviceDescription = getEnvVar("SERVICE_DESCRIPTION", "Shared service for "+serviceName)
-	authUser = getEnvVar("SERVICE_AUTH_USER", "")
-	authPassword = getEnvVar("SERVICE_AUTH_PASSWORD", "")
-	if (authUser != "") && (authPassword != "") {
-		// secure service broker with basic auth if both env variables are set
-		//TODO fixme
-		//m.Use(auth.Basic(authUser, authPassword))
-	}
-	syslogDrainUrl = getEnvVar("SYSLOG_DRAIN_URL", "")
-	tags = getEnvVar("SERVICE_TAGS", "")
-	serviceDashboardURL = getEnvVar("SERVICE_DASHBOARD_URL", fmt.Sprintf("%s/dashboard", appURL))
-	metadataDisplayName = getEnvVar("SERVICE_METADATA_DISPLAYNAME", serviceName)
-	metadataLongDescription = getEnvVar("SERVICE_METADATA_LONGDESC", serviceDescription)
-	metadataImageURL = getEnvVar("SERVICE_METADATA_IMAGEURL", "")
-	metadataProviderDisplayName = getEnvVar("SERVICE_METADATA_PROVIDERDISPLAYNAME", "")
-	metadataDocumentationUrl = getEnvVar("SERVICE_METADATA_DOCURL", "")
-	metadataSupportUrl = getEnvVar("SERVICE_METADATA_SUPPORTURL", "")
-	credentials = getEnvVar("SERVICE_CREDENTIALS", "{}")
+	serviceName := getEnvVar("SERVICE_NAME", appName)
+	servicePlan := getEnvVar("SERVICE_PLAN", "shared")
+	serviceDescription := getEnvVar("SERVICE_DESCRIPTION", "Shared service for "+serviceName)
+	authUser := getEnvVar("SERVICE_AUTH_USER", "")
+	authPassword := getEnvVar("SERVICE_AUTH_PASSWORD", "")
+	syslogDrainUrl := getEnvVar("SYSLOG_DRAIN_URL", "")
+	tags := getEnvVar("SERVICE_TAGS", "")
+	serviceDashboardURL := getEnvVar("SERVICE_DASHBOARD_URL", fmt.Sprintf("%s/dashboard", appURL))
+	metadataDisplayName := getEnvVar("SERVICE_METADATA_DISPLAYNAME", serviceName)
+	metadataLongDescription := getEnvVar("SERVICE_METADATA_LONGDESC", serviceDescription)
+	metadataImageURL := getEnvVar("SERVICE_METADATA_IMAGEURL", "")
+	metadataProviderDisplayName := getEnvVar("SERVICE_METADATA_PROVIDERDISPLAYNAME", "")
+	metadataDocumentationUrl := getEnvVar("SERVICE_METADATA_DOCURL", "")
+	metadataSupportUrl := getEnvVar("SERVICE_METADATA_SUPPORTURL", "")
+	credentials := getEnvVar("SERVICE_CREDENTIALS", "{}")
 	// Each provision/deprovision request will support an async GET /last_operation request
-	fakeAsync = getEnvVar("SERVICE_FAKE_ASYNC", "") == "true"
+	fakeAsync := getEnvVar("SERVICE_FAKE_ASYNC", "") == "true"
 
 	fmt.Println("Running as", appURL)
 
 	r := chi.NewRouter()
+
+	if (authUser != "") && (authPassword != "") {
+		// secure service broker with basic auth if both env variables are set
+		r.Use(handler.New("Authorization Required", map[string][]string{
+			authUser: {authPassword},
+		}))
+	}
+
 	r.Use(middleware.Timeout(60 * time.Second))
 	c := handler.BrokerCatalog{
 		Tags:                        tags,

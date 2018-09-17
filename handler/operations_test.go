@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/cloudfoundry-community/types-cf"
-	"github.com/springernature/envvars-servicebroker/internal"
+	"github.com/springernature/envvars-servicebroker/test"
 )
 
 type response struct {
@@ -22,7 +22,7 @@ type partialResponse struct {
 
 func TestGetCatalog(t *testing.T) {
 	bc := BrokerCatalog{}
-	w := internal.CreateFakeWriter()
+	w := test.CreateFakeWriter()
 	r := &http.Request{
 		Method: http.MethodGet,
 	}
@@ -59,7 +59,7 @@ func TestGetCatalog(t *testing.T) {
 
 func TestGetLastOperation(t *testing.T) {
 	lo := LastOperation{}
-	w := internal.CreateFakeWriter()
+	w := test.CreateFakeWriter()
 	r := &http.Request{
 		Method: http.MethodGet,
 	}
@@ -101,7 +101,7 @@ func TestCreateServiceInstance(t *testing.T) {
 		DashboardURL: "amazing.dashboard.com",
 		ServiceID:    "some service id",
 	}
-	w := internal.CreateFakeWriter()
+	w := test.CreateFakeWriter()
 	r := &http.Request{
 		Method: http.MethodPut,
 	}
@@ -142,7 +142,7 @@ func TestDeleteServiceInstance(t *testing.T) {
 	di := DeleteServiceInstance{
 		ServiceID: "some service id",
 	}
-	w := internal.CreateFakeWriter()
+	w := test.CreateFakeWriter()
 	r := &http.Request{
 		Method: http.MethodDelete,
 	}
@@ -182,7 +182,7 @@ func TestCreateServiceBinding(t *testing.T) {
 		ServiceID:        "some service id",
 		ServiceBindingID: "some service binding",
 	}
-	w := internal.CreateFakeWriter()
+	w := test.CreateFakeWriter()
 	r := &http.Request{
 		Method: http.MethodPut,
 	}
@@ -230,7 +230,7 @@ func TestDeleteServiceBinding(t *testing.T) {
 		ServiceID:        id,
 		ServiceBindingID: bId,
 	}
-	w := internal.CreateFakeWriter()
+	w := test.CreateFakeWriter()
 	r := &http.Request{
 		Method: http.MethodDelete,
 	}
@@ -263,7 +263,7 @@ func TestDeleteServiceBinding(t *testing.T) {
 
 func TestShowServiceDashboard(t *testing.T) {
 	sd := ServiceDashboard{}
-	w := internal.CreateFakeWriter()
+	w := test.CreateFakeWriter()
 	r := &http.Request{
 		Method: http.MethodGet,
 	}
