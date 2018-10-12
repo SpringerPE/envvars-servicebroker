@@ -1,1 +1,1 @@
-web: envvars-servicebroker
+web: envvars-servicebroker-binary
